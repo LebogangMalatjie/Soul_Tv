@@ -35,20 +35,66 @@ async function fetchFromTMDB(endpoint) {
     }
 }
 
-// Fetch all content
+// EXPANDED: Fetch all content with variety
 async function fetchContent() {
-    const [trending, movies, tvShows] = await Promise.all([
+    // Fetch from many different sources for variety
+    const [
+        trending,
+        popularMovies,
+        topRatedMovies,
+        upcomingMovies,
+        nowPlaying,
+        popularTV,
+        topRatedTV,
+        airingToday,
+        actionMovies,
+        comedyMovies,
+        horrorMovies,
+        scifiMovies,
+        thrillerMovies,
+        romanceMovies,
+        animationMovies,
+        documentaryMovies
+    ] = await Promise.all([
         fetchFromTMDB('type=trending'),
         fetchFromTMDB('type=popular'),
-        fetchFromTMDB('type=tv_popular')  // We'll add this endpoint
+        fetchFromTMDB('type=top_rated'),
+        fetchFromTMDB('type=upcoming'),
+        fetchFromTMDB('type=now_playing'),
+        fetchFromTMDB('type=tv_popular'),
+        fetchFromTMDB('type=tv_top_rated'),
+        fetchFromTMDB('type=tv_airing_today'),
+        fetchFromTMDB('type=action'),
+        fetchFromTMDB('type=comedy'),
+        fetchFromTMDB('type=horror'),
+        fetchFromTMDB('type=scifi'),
+        fetchFromTMDB('type=thriller'),
+        fetchFromTMDB('type=romance'),
+        fetchFromTMDB('type=animation'),
+        fetchFromTMDB('type=documentary')
     ]);
     
     let all = [];
-    if (trending.results) all.push(...trending.results);
-    if (movies.results) all.push(...movies.results);
-    if (tvShows.results) all.push(...tvShows.results);
     
-    // Remove duplicates
+    // Combine all results
+    if (trending.results) all.push(...trending.results);
+    if (popularMovies.results) all.push(...popularMovies.results);
+    if (topRatedMovies.results) all.push(...topRatedMovies.results);
+    if (upcomingMovies.results) all.push(...upcomingMovies.results);
+    if (nowPlaying.results) all.push(...nowPlaying.results);
+    if (popularTV.results) all.push(...popularTV.results);
+    if (topRatedTV.results) all.push(...topRatedTV.results);
+    if (airingToday.results) all.push(...airingToday.results);
+    if (actionMovies.results) all.push(...actionMovies.results);
+    if (comedyMovies.results) all.push(...comedyMovies.results);
+    if (horrorMovies.results) all.push(...horrorMovies.results);
+    if (scifiMovies.results) all.push(...scifiMovies.results);
+    if (thrillerMovies.results) all.push(...thrillerMovies.results);
+    if (romanceMovies.results) all.push(...romanceMovies.results);
+    if (animationMovies.results) all.push(...animationMovies.results);
+    if (documentaryMovies.results) all.push(...documentaryMovies.results);
+    
+    // Remove duplicates by ID
     const unique = new Map();
     all.forEach(item => unique.set(item.id, item));
     all = Array.from(unique.values());
@@ -58,6 +104,7 @@ async function fetchContent() {
     seriesLibrary = all.filter(i => i.name);
     contentLibrary = all;
     
+    console.log(`Loaded ${all.length} unique titles (${movieLibrary.length} movies, ${seriesLibrary.length} series)`);
     return all;
 }
 
@@ -123,11 +170,19 @@ function createContentCard(item) {
         `${IMG_BASE}${item.poster_path}` : 
         'https://via.placeholder.com/300x450/0a0a0f/ff003c?text=NO+IMAGE';
     
+    // Get rating color
+    const rating = item.vote_average || 0;
+    let ratingColor = '#666';
+    if (rating >= 7) ratingColor = '#00ff41';
+    else if (rating >= 5) ratingColor = '#ffd700';
+    else ratingColor = '#ff003c';
+    
     card.innerHTML = `
         <img class="card-image" src="${poster}" alt="${title}" loading="lazy">
         <div class="card-info">
             <div class="card-title">${title.substring(0, 35)}</div>
             <div class="card-meta">${year} • ${item.title ? 'MOVIE' : 'SERIES'}</div>
+            <div class="card-rating" style="color:${ratingColor}">⭐ ${rating.toFixed(1)}</div>
         </div>
     `;
     
@@ -160,7 +215,7 @@ function renderCarousel(items, containerId = 'mainCarousel') {
     if (!container) return;
     
     container.innerHTML = '';
-    currentDisplayItems = items.slice(0, 60);
+    currentDisplayItems = items.slice(0, 100); // Show up to 100 items
     
     currentDisplayItems.forEach(item => {
         const card = createContentCard(item);
