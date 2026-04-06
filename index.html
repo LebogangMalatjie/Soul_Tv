@@ -4,82 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>SOUL TV | Nexus Stream - Personalized</title>
-    
-    <!-- POPUP BLOCKER: Prevent redirects before they happen -->
-    <script>
-        // Block all popups and redirects globally
-        (function() {
-            // Store original methods
-            const originalOpen = window.open;
-            const originalAlert = window.alert;
-            const originalConfirm = window.confirm;
-            const originalPrompt = window.prompt;
-            
-            // Block window.open (popups)
-            window.open = function(url, target, features) {
-                console.log('🚫 Blocked popup attempt:', url);
-                // Return a fake window object that does nothing
-                return {
-                    focus: function() {},
-                    blur: function() {},
-                    close: function() {},
-                    closed: true,
-                    document: { write: function() {}, writeln: function() {} },
-                    location: { href: '' },
-                    opener: null
-                };
-            };
-            
-            // Block annoying dialogs
-            window.alert = function(msg) { console.log('🚫 Blocked alert:', msg); };
-            window.confirm = function(msg) { console.log('🚫 Blocked confirm:', msg); return false; };
-            window.prompt = function(msg, def) { console.log('🚫 Blocked prompt:', msg); return null; };
-            
-            // Block beforeunload (redirect warnings)
-            window.onbeforeunload = null;
-            
-            // Block location changes to external sites
-            let currentHref = location.href;
-            Object.defineProperty(window.location, 'href', {
-                get: function() { return currentHref; },
-                set: function(url) {
-                    // Only allow same-origin navigation or hashes
-                    if (url && (url.startsWith('#') || url.startsWith(location.origin) || url.startsWith('/') || url.startsWith('javascript:'))) {
-                        currentHref = url;
-                        return true;
-                    }
-                    console.log('🚫 Blocked redirect to:', url);
-                    return true;
-                }
-            });
-            
-            // Block click popups on document
-            document.addEventListener('click', function(e) {
-                // Check if click is on a link that would open new window
-                const target = e.target.closest('a[target="_blank"], a[target="new"]');
-                if (target) {
-                    console.log('🚫 Blocked link popup');
-                    e.preventDefault();
-                    e.stopPropagation();
-                    return false;
-                }
-            }, true);
-            
-            console.log('✅ Global popup blocker active');
-        })();
-    </script>
-    
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Rajdhani:wght@300;400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
-    <!-- Main Styles -->
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-    <!-- Visual Effects -->
     <div class="scanlines"></div>
     <div class="noise"></div>
 
-    <!-- STARTUP PAGE -->
     <div class="startup-page" id="startupPage">
         <div class="soul-bg">
             <div class="soul-orb"></div>
@@ -100,9 +31,7 @@
         </div>
     </div>
 
-    <!-- MAIN PAGE -->
     <div class="main-page" id="mainPage">
-        <!-- Navigation -->
         <nav class="nav-container">
             <a href="#" class="logo">SOUL TV</a>
             <ul class="nav-links">
@@ -124,7 +53,6 @@
             </div>
         </nav>
 
-        <!-- Hero Section -->
         <section class="hero">
             <div class="hero-bg" id="heroBg"></div>
             <div class="hero-overlay"></div>
@@ -141,7 +69,6 @@
             </div>
         </section>
 
-        <!-- Recommended Section (Hidden until login) -->
         <div class="content-section" id="recommendedSection">
             <div class="section-header">
                 <h2 class="section-title">✦ YOU MIGHT ALSO LIKE ✦</h2>
@@ -153,7 +80,6 @@
             </div>
         </div>
 
-        <!-- Main Content -->
         <div class="content-section" id="contentSection">
             <div class="section-header">
                 <h2 class="section-title" id="sectionTitle">ALL_CONTENT</h2>
@@ -168,7 +94,6 @@
             </div>
         </div>
 
-        <!-- Footer -->
         <footer class="footer">
             <div class="footer-logo">SOUL_TV</div>
             <div>SYSTEM_BY // LEBOGANG MALATJIE</div>
@@ -176,7 +101,6 @@
             <div style="margin-top: 10px; font-size: 11px;">⚡ PERSONALIZED | SMART RECOMMENDATIONS</div>
         </footer>
 
-        <!-- Auth Modal -->
         <div class="auth-modal" id="authModal">
             <div class="close-auth" id="closeAuth">✕</div>
             <div class="auth-container">
@@ -187,7 +111,6 @@
             </div>
         </div>
 
-        <!-- PLAYER MODAL -->
         <div class="player-modal" id="playerModal">
             <div class="player-container">
                 <div class="player-header">
@@ -195,7 +118,7 @@
                     <button class="close-player" id="closePlayer">✕</button>
                 </div>
                 <div class="video-wrapper">
-                    <iframe id="videoFrame" class="video-frame" src="" allowfullscreen referrerpolicy="no-referrer" sandbox="allow-same-origin allow-scripts allow-presentation"></iframe>
+                    <iframe id="videoFrame" class="video-frame" src="" allowfullscreen referrerpolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-presentation"></iframe>
                 </div>
                 <div class="episode-controls">
                     <select id="sourceSelect" class="source-selector">
@@ -234,7 +157,6 @@
         </div>
     </div>
 
-    <!-- Scripts -->
     <script src="js/api.js"></script>
     <script src="js/auth.js"></script>
     <script src="js/player.js"></script>
