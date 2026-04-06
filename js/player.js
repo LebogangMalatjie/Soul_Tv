@@ -1,6 +1,5 @@
-// Video Player & Streaming Logic with Popup Blocking
+// Video Player & Streaming Logic
 
-// Video source configurations - reordered with most reliable first
 const VIDEO_SOURCES = [
     { name: "VIDSRC.PRO", url: (id, type, season, episode) => `https://vidsrc.pro/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDSRC.ME", url: (id, type, season, episode) => `https://vidsrc.me/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
@@ -16,7 +15,6 @@ const VIDEO_SOURCES = [
     { name: "VIDKING", url: (id, type, season, episode) => `https://www.vidking.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` }
 ];
 
-// Player state
 let currentContent = null;
 let currentType = null;
 let currentSeason = 1;
@@ -26,54 +24,11 @@ let autoNextEnabled = true;
 let isAutoMode = true;
 let failoverTimeout = null;
 
-// Get embed URL
 function getEmbedUrl(sourceIndex, mediaType, tmdbId, season = 1, episode = 1) {
     if (sourceIndex >= VIDEO_SOURCES.length) return null;
     return VIDEO_SOURCES[sourceIndex].url(tmdbId, mediaType, season, episode);
 }
 
-// POPUP BLOCKER: Setup iframe with maximum protection
-function setupIframeProtection() {
-    const iframe = document.getElementById('videoFrame');
-    if (!iframe) return;
-    
-    // Strict sandbox - blocks popups but allows video playback
-    iframe.sandbox = 'allow-same-origin allow-scripts allow-presentation';
-    
-    // Additional security attributes
-    iframe.setAttribute('referrerpolicy', 'no-referrer');
-    iframe.setAttribute('allow', 'fullscreen; autoplay; encrypted-media');
-    iframe.setAttribute('loading', 'eager');
-    
-    // CSP and security headers are handled by netlify.toml
-}
-
-// POPUP BLOCKER: Inject blocking script into iframe context
-function injectPopupBlocker() {
-    const iframe = document.getElementById('videoFrame');
-    if (!iframe || !iframe.contentWindow) return;
-    
-    try {
-        // Block common popup methods
-        iframe.contentWindow.open = function() { 
-            console.log('Blocked popup attempt'); 
-            return null; 
-        };
-        
-        iframe.contentWindow.alert = function() { return null; };
-        iframe.contentWindow.confirm = function() { return false; };
-        iframe.contentWindow.prompt = function() { return null; };
-        
-        // Block redirects
-        iframe.contentWindow.onbeforeunload = null;
-        
-    } catch(e) {
-        // Cross-origin restrictions may prevent this, which is fine
-        console.log('Cross-origin protection active');
-    }
-}
-
-// Load specific source (manual selection)
 function loadSpecificSource(sourceIndex, mediaType, tmdbId, season, episode, title) {
     if (failoverTimeout) clearTimeout(failoverTimeout);
     
@@ -83,37 +38,14 @@ function loadSpecificSource(sourceIndex, mediaType, tmdbId, season, episode, tit
     const videoFrame = document.getElementById('videoFrame');
     const failoverBadge = document.getElementById('failoverBadge');
     
-    // Setup protection before loading
-    setupIframeProtection();
-    
-    if (videoFrame) {
-        // Clear previous content
-        videoFrame.src = 'about:blank';
-        
-        // Small delay to ensure cleanup
-        setTimeout(() => {
-            videoFrame.src = embedUrl;
-            
-            // Try to inject blocker after load
-            videoFrame.onload = function() {
-                injectPopupBlocker();
-                // Retry injection multiple times as scripts load
-                setTimeout(injectPopupBlocker, 1000);
-                setTimeout(injectPopupBlocker, 3000);
-                setTimeout(injectPopupBlocker, 5000);
-            };
-        }, 100);
-    }
+    if (videoFrame) videoFrame.src = embedUrl;
     
     logToTerminal(`🎬 SOURCE: ${VIDEO_SOURCES[sourceIndex].name}`);
-    if (failoverBadge) {
-        failoverBadge.innerHTML = `🎬 SOURCE: ${VIDEO_SOURCES[sourceIndex].name}`;
-    }
+    if (failoverBadge) failoverBadge.innerHTML = `🎬 SOURCE: ${VIDEO_SOURCES[sourceIndex].name}`;
     
     return true;
 }
 
-// Auto-failover system with popup protection
 async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, title) {
     if (!isAutoMode) return;
     
@@ -131,23 +63,13 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
     if (badge) badge.innerHTML = `🔄 TRYING: ${VIDEO_SOURCES[sourceIndex].name}`;
     
     const videoFrame = document.getElementById('videoFrame');
-    if (videoFrame) {
-        setupIframeProtection();
-        videoFrame.src = embedUrl;
-        
-        // Inject blocker on load
-        videoFrame.onload = function() {
-            injectPopupBlocker();
-            setTimeout(injectPopupBlocker, 2000);
-        };
-    }
+    if (videoFrame) videoFrame.src = embedUrl;
     
     return new Promise((resolve) => {
         let resolved = false;
         
         if (failoverTimeout) clearTimeout(failoverTimeout);
         
-        // 12 second timeout per source
         failoverTimeout = setTimeout(() => {
             if (!resolved && isAutoMode) {
                 resolved = true;
@@ -155,24 +77,16 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
             }
         }, 12000);
         
-        // Success handler
         videoFrame.onload = () => {
-            injectPopupBlocker();
             if (!resolved && isAutoMode) {
                 clearTimeout(failoverTimeout);
                 resolved = true;
                 logToTerminal(`✅ Working: ${VIDEO_SOURCES[sourceIndex].name}`);
                 if (badge) badge.innerHTML = `✅ ACTIVE: ${VIDEO_SOURCES[sourceIndex].name}`;
-                
-                // Keep injecting blocker periodically
-                const blockerInterval = setInterval(injectPopupBlocker, 5000);
-                videoFrame.dataset.blockerInterval = blockerInterval;
-                
                 resolve(true);
             }
         };
         
-        // Error handler
         videoFrame.onerror = () => {
             if (!resolved && isAutoMode) {
                 clearTimeout(failoverTimeout);
@@ -183,7 +97,6 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
     });
 }
 
-// Main load function with failover
 function loadVideoWithFailover(mediaType, tmdbId, season = 1, episode = 1, title = "") {
     const sourceSelect = document.getElementById('sourceSelect');
     const mode = sourceSelect ? sourceSelect.value : 'auto';
@@ -197,18 +110,11 @@ function loadVideoWithFailover(mediaType, tmdbId, season = 1, episode = 1, title
     }
 }
 
-// Manual source change
 function manualSourceChange() {
     if (!currentContent) return;
     
     const sourceSelect = document.getElementById('sourceSelect');
     const mode = sourceSelect ? sourceSelect.value : 'auto';
-    
-    // Clear any existing blocker intervals
-    const videoFrame = document.getElementById('videoFrame');
-    if (videoFrame && videoFrame.dataset.blockerInterval) {
-        clearInterval(parseInt(videoFrame.dataset.blockerInterval));
-    }
     
     if (mode === 'auto') {
         isAutoMode = true;
@@ -219,7 +125,6 @@ function manualSourceChange() {
     }
 }
 
-// Open content (movie or series)
 async function openContent(item) {
     const isMovie = !!item.title;
     const tmdbId = item.id;
@@ -228,34 +133,24 @@ async function openContent(item) {
     currentContent = item;
     currentType = isMovie ? 'movie' : 'tv';
     
-    // Update player title
     const playerTitle = document.getElementById('playerTitle');
-    if (playerTitle) {
-        playerTitle.innerHTML = `${title.toUpperCase()} ${!isMovie ? '• SERIES' : ''}`;
-    }
+    if (playerTitle) playerTitle.innerHTML = `${title.toUpperCase()} ${!isMovie ? '• SERIES' : ''}`;
     
-    // Show modal
     const modal = document.getElementById('playerModal');
     if (modal) {
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
     
-    // Add to history if logged in
-    if (typeof addToWatchHistory === 'function') {
-        addToWatchHistory(item);
-    }
+    if (typeof addToWatchHistory === 'function') addToWatchHistory(item);
     
     if (!isMovie) {
-        // TV Show setup
         setupTVPlayer(tmdbId, title);
     } else {
-        // Movie setup
         setupMoviePlayer(tmdbId, title);
     }
 }
 
-// Setup TV player
 async function setupTVPlayer(tmdbId, title) {
     const seasonSelect = document.getElementById('seasonSelect');
     const episodeListContainer = document.getElementById('episodeListContainer');
@@ -268,7 +163,6 @@ async function setupTVPlayer(tmdbId, title) {
         if (details && details.seasons) {
             const seasons = details.seasons.filter(s => s.season_number > 0);
             
-            // Populate season selector
             if (seasonSelect) {
                 seasonSelect.innerHTML = '';
                 for (let s of seasons) {
@@ -279,9 +173,7 @@ async function setupTVPlayer(tmdbId, title) {
                 }
             }
             
-            if (seasons.length > 0) {
-                await loadSeasonEpisodes(tmdbId, seasons[0].season_number);
-            }
+            if (seasons.length > 0) await loadSeasonEpisodes(tmdbId, seasons[0].season_number);
         } else {
             setupDefaultSeasons(tmdbId);
         }
@@ -290,7 +182,6 @@ async function setupTVPlayer(tmdbId, title) {
     }
 }
 
-// Setup Movie player
 function setupMoviePlayer(tmdbId, title) {
     const seasonSelect = document.getElementById('seasonSelect');
     const episodeListContainer = document.getElementById('episodeListContainer');
@@ -301,7 +192,6 @@ function setupMoviePlayer(tmdbId, title) {
     loadVideoWithFailover('movie', tmdbId, 1, 1, title);
 }
 
-// Setup default seasons (fallback)
 function setupDefaultSeasons(tmdbId) {
     const seasonSelect = document.getElementById('seasonSelect');
     if (seasonSelect) {
@@ -316,7 +206,6 @@ function setupDefaultSeasons(tmdbId) {
     loadSeasonEpisodes(tmdbId, 1);
 }
 
-// Load season episodes
 async function loadSeasonEpisodes(tmdbId, seasonNum) {
     currentSeason = seasonNum;
     
@@ -325,11 +214,8 @@ async function loadSeasonEpisodes(tmdbId, seasonNum) {
     if (episodes.length > 0) {
         episodeList = episodes;
     } else {
-        // Fallback
         episodeList = [];
-        for (let i = 1; i <= 10; i++) {
-            episodeList.push({ episode: i, title: `Episode ${i}` });
-        }
+        for (let i = 1; i <= 10; i++) episodeList.push({ episode: i, title: `Episode ${i}` });
     }
     
     renderEpisodeList();
@@ -337,7 +223,6 @@ async function loadSeasonEpisodes(tmdbId, seasonNum) {
     playEpisode(0);
 }
 
-// Render episode buttons
 function renderEpisodeList() {
     const container = document.getElementById('episodeListContainer');
     if (!container) return;
@@ -350,69 +235,40 @@ function renderEpisodeList() {
         if (idx === currentEpisode) btn.classList.add('active');
         btn.innerText = `EP ${ep.episode}`;
         btn.title = ep.title;
-        btn.addEventListener('click', () => {
-            currentEpisode = idx;
-            playEpisode(idx);
-        });
+        btn.onclick = () => { currentEpisode = idx; playEpisode(idx); };
         container.appendChild(btn);
     });
 }
 
-// Play specific episode
 function playEpisode(index) {
     if (!episodeList[index] || !currentContent) return;
     
     const ep = episodeList[index];
-    const title = currentContent.name;
+    loadVideoWithFailover('tv', currentContent.id, currentSeason, ep.episode, currentContent.name);
     
-    loadVideoWithFailover('tv', currentContent.id, currentSeason, ep.episode, title);
-    
-    // Update active button
     document.querySelectorAll('.episode-btn').forEach((btn, i) => {
         if (i === index) btn.classList.add('active');
         else btn.classList.remove('active');
     });
     
-    // Update history
-    if (typeof addToWatchHistory === 'function') {
-        addToWatchHistory(currentContent, currentSeason, ep.episode);
-    }
+    if (typeof addToWatchHistory === 'function') addToWatchHistory(currentContent, currentSeason, ep.episode);
 }
 
-// Change season handler
 function changeSeason() {
     const seasonSelect = document.getElementById('seasonSelect');
     const newSeason = seasonSelect ? parseInt(seasonSelect.value) : 1;
-    
-    if (currentContent && currentType === 'tv') {
-        loadSeasonEpisodes(currentContent.id, newSeason);
-    }
+    if (currentContent && currentType === 'tv') loadSeasonEpisodes(currentContent.id, newSeason);
 }
 
-// Skip intro
 function skipIntro() {
     logToTerminal('⏩ SKIP INTRO');
-    // Try to seek forward in video if possible
-    const iframe = document.getElementById('videoFrame');
-    if (iframe && iframe.contentWindow) {
-        try {
-            const video = iframe.contentWindow.document.querySelector('video');
-            if (video) video.currentTime += 60; // Skip 60 seconds
-        } catch(e) {
-            // Cross-origin restriction
-        }
-    }
 }
 
-// Skip outro + auto next
 function skipOutro() {
     logToTerminal('⏩ SKIP OUTRO');
-    if (autoNextEnabled && currentType === 'tv') {
-        nextEpisode();
-    }
+    if (autoNextEnabled && currentType === 'tv') nextEpisode();
 }
 
-// Next episode
 function nextEpisode() {
     if (currentType === 'tv' && currentEpisode + 1 < episodeList.length) {
         currentEpisode++;
@@ -421,23 +277,15 @@ function nextEpisode() {
     }
 }
 
-// Close player and cleanup
 function closePlayer() {
     if (failoverTimeout) clearTimeout(failoverTimeout);
     
-    // Clear blocker interval
-    const videoFrame = document.getElementById('videoFrame');
-    if (videoFrame) {
-        if (videoFrame.dataset.blockerInterval) {
-            clearInterval(parseInt(videoFrame.dataset.blockerInterval));
-        }
-        videoFrame.src = 'about:blank';
-    }
-    
     const modal = document.getElementById('playerModal');
+    const videoFrame = document.getElementById('videoFrame');
     const sourceSelect = document.getElementById('sourceSelect');
     const failoverBadge = document.getElementById('failoverBadge');
     
+    if (videoFrame) videoFrame.src = '';
     if (modal) {
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
@@ -451,7 +299,6 @@ function closePlayer() {
     isAutoMode = true;
 }
 
-// Terminal logging
 function logToTerminal(msg) {
     const term = document.getElementById('playerTerminal');
     if (!term) return;
@@ -462,16 +309,10 @@ function logToTerminal(msg) {
     term.appendChild(line);
     term.scrollTop = term.scrollHeight;
     
-    // Keep only last 20 lines
-    while (term.children.length > 20) {
-        term.removeChild(term.children[0]);
-    }
+    while (term.children.length > 20) term.removeChild(term.children[0]);
 }
 
-// Scroll carousel
 function scrollCarousel(id, dir) {
     const el = document.getElementById(id);
-    if (el) {
-        el.scrollBy({ left: dir * 280, behavior: 'smooth' });
-    }
+    if (el) el.scrollBy({ left: dir * 280, behavior: 'smooth' });
 }
