@@ -1,19 +1,19 @@
-// Video Player & Streaming Logic
+// Video Player & Streaming Logic with Popup Blocking
 
-// Video source configurations
+// Video source configurations - reordered with most reliable first
 const VIDEO_SOURCES = [
-    { name: "VIDKING", url: (id, type, season, episode) => `https://www.vidking.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDSRC.PRO", url: (id, type, season, episode) => `https://vidsrc.pro/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDSRC.ME", url: (id, type, season, episode) => `https://vidsrc.me/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
-    { name: "VIDSRC.WTF", url: (id, type, season, episode) => `https://vidsrc.wtf/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDLINK.PRO", url: (id, type, season, episode) => `https://vidlink.pro/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "2EMBED", url: (id, type, season, episode) => `https://2embed.org/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
-    { name: "AUTOEMBED", url: (id, type, season, episode) => `https://autoembed.to/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "MULTIEMBED", url: (id, type, season, episode) => `https://multiembed.to/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "SUPEREMBED", url: (id, type, season, episode) => `https://superembed.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
+    { name: "AUTOEMBED", url: (id, type, season, episode) => `https://autoembed.to/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDEMBED", url: (id, type, season, episode) => `https://vidembed.cc/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "FLIXEMBED", url: (id, type, season, episode) => `https://flixembed.com/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
-    { name: "MOVCLOUD", url: (id, type, season, episode) => `https://movcloud.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` }
+    { name: "MOVCLOUD", url: (id, type, season, episode) => `https://movcloud.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
+    { name: "VIDSRC.WTF", url: (id, type, season, episode) => `https://vidsrc.wtf/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
+    { name: "VIDKING", url: (id, type, season, episode) => `https://www.vidking.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` }
 ];
 
 // Player state
@@ -32,6 +32,47 @@ function getEmbedUrl(sourceIndex, mediaType, tmdbId, season = 1, episode = 1) {
     return VIDEO_SOURCES[sourceIndex].url(tmdbId, mediaType, season, episode);
 }
 
+// POPUP BLOCKER: Setup iframe with maximum protection
+function setupIframeProtection() {
+    const iframe = document.getElementById('videoFrame');
+    if (!iframe) return;
+    
+    // Strict sandbox - blocks popups but allows video playback
+    iframe.sandbox = 'allow-same-origin allow-scripts allow-presentation';
+    
+    // Additional security attributes
+    iframe.setAttribute('referrerpolicy', 'no-referrer');
+    iframe.setAttribute('allow', 'fullscreen; autoplay; encrypted-media');
+    iframe.setAttribute('loading', 'eager');
+    
+    // CSP and security headers are handled by netlify.toml
+}
+
+// POPUP BLOCKER: Inject blocking script into iframe context
+function injectPopupBlocker() {
+    const iframe = document.getElementById('videoFrame');
+    if (!iframe || !iframe.contentWindow) return;
+    
+    try {
+        // Block common popup methods
+        iframe.contentWindow.open = function() { 
+            console.log('Blocked popup attempt'); 
+            return null; 
+        };
+        
+        iframe.contentWindow.alert = function() { return null; };
+        iframe.contentWindow.confirm = function() { return false; };
+        iframe.contentWindow.prompt = function() { return null; };
+        
+        // Block redirects
+        iframe.contentWindow.onbeforeunload = null;
+        
+    } catch(e) {
+        // Cross-origin restrictions may prevent this, which is fine
+        console.log('Cross-origin protection active');
+    }
+}
+
 // Load specific source (manual selection)
 function loadSpecificSource(sourceIndex, mediaType, tmdbId, season, episode, title) {
     if (failoverTimeout) clearTimeout(failoverTimeout);
@@ -42,7 +83,28 @@ function loadSpecificSource(sourceIndex, mediaType, tmdbId, season, episode, tit
     const videoFrame = document.getElementById('videoFrame');
     const failoverBadge = document.getElementById('failoverBadge');
     
-    if (videoFrame) videoFrame.src = embedUrl;
+    // Setup protection before loading
+    setupIframeProtection();
+    
+    if (videoFrame) {
+        // Clear previous content
+        videoFrame.src = 'about:blank';
+        
+        // Small delay to ensure cleanup
+        setTimeout(() => {
+            videoFrame.src = embedUrl;
+            
+            // Try to inject blocker after load
+            videoFrame.onload = function() {
+                injectPopupBlocker();
+                // Retry injection multiple times as scripts load
+                setTimeout(injectPopupBlocker, 1000);
+                setTimeout(injectPopupBlocker, 3000);
+                setTimeout(injectPopupBlocker, 5000);
+            };
+        }, 100);
+    }
+    
     logToTerminal(`🎬 SOURCE: ${VIDEO_SOURCES[sourceIndex].name}`);
     if (failoverBadge) {
         failoverBadge.innerHTML = `🎬 SOURCE: ${VIDEO_SOURCES[sourceIndex].name}`;
@@ -51,7 +113,7 @@ function loadSpecificSource(sourceIndex, mediaType, tmdbId, season, episode, tit
     return true;
 }
 
-// Auto-failover system
+// Auto-failover system with popup protection
 async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, title) {
     if (!isAutoMode) return;
     
@@ -69,28 +131,43 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
     if (badge) badge.innerHTML = `🔄 TRYING: ${VIDEO_SOURCES[sourceIndex].name}`;
     
     const videoFrame = document.getElementById('videoFrame');
-    if (videoFrame) videoFrame.src = embedUrl;
+    if (videoFrame) {
+        setupIframeProtection();
+        videoFrame.src = embedUrl;
+        
+        // Inject blocker on load
+        videoFrame.onload = function() {
+            injectPopupBlocker();
+            setTimeout(injectPopupBlocker, 2000);
+        };
+    }
     
     return new Promise((resolve) => {
         let resolved = false;
         
         if (failoverTimeout) clearTimeout(failoverTimeout);
         
-        // 10 second timeout per source
+        // 12 second timeout per source
         failoverTimeout = setTimeout(() => {
             if (!resolved && isAutoMode) {
                 resolved = true;
                 tryLoadVideo(sourceIndex + 1, mediaType, tmdbId, season, episode, title).then(resolve);
             }
-        }, 10000);
+        }, 12000);
         
         // Success handler
         videoFrame.onload = () => {
+            injectPopupBlocker();
             if (!resolved && isAutoMode) {
                 clearTimeout(failoverTimeout);
                 resolved = true;
                 logToTerminal(`✅ Working: ${VIDEO_SOURCES[sourceIndex].name}`);
                 if (badge) badge.innerHTML = `✅ ACTIVE: ${VIDEO_SOURCES[sourceIndex].name}`;
+                
+                // Keep injecting blocker periodically
+                const blockerInterval = setInterval(injectPopupBlocker, 5000);
+                videoFrame.dataset.blockerInterval = blockerInterval;
+                
                 resolve(true);
             }
         };
@@ -106,7 +183,7 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
     });
 }
 
-// Main load function
+// Main load function with failover
 function loadVideoWithFailover(mediaType, tmdbId, season = 1, episode = 1, title = "") {
     const sourceSelect = document.getElementById('sourceSelect');
     const mode = sourceSelect ? sourceSelect.value : 'auto';
@@ -120,12 +197,18 @@ function loadVideoWithFailover(mediaType, tmdbId, season = 1, episode = 1, title
     }
 }
 
-// Manual source change handler
+// Manual source change
 function manualSourceChange() {
     if (!currentContent) return;
     
     const sourceSelect = document.getElementById('sourceSelect');
     const mode = sourceSelect ? sourceSelect.value : 'auto';
+    
+    // Clear any existing blocker intervals
+    const videoFrame = document.getElementById('videoFrame');
+    if (videoFrame && videoFrame.dataset.blockerInterval) {
+        clearInterval(parseInt(videoFrame.dataset.blockerInterval));
+    }
     
     if (mode === 'auto') {
         isAutoMode = true;
@@ -309,7 +392,16 @@ function changeSeason() {
 // Skip intro
 function skipIntro() {
     logToTerminal('⏩ SKIP INTRO');
-    // Implementation depends on video source capabilities
+    // Try to seek forward in video if possible
+    const iframe = document.getElementById('videoFrame');
+    if (iframe && iframe.contentWindow) {
+        try {
+            const video = iframe.contentWindow.document.querySelector('video');
+            if (video) video.currentTime += 60; // Skip 60 seconds
+        } catch(e) {
+            // Cross-origin restriction
+        }
+    }
 }
 
 // Skip outro + auto next
@@ -329,12 +421,20 @@ function nextEpisode() {
     }
 }
 
-// Close player
+// Close player and cleanup
 function closePlayer() {
     if (failoverTimeout) clearTimeout(failoverTimeout);
     
-    const modal = document.getElementById('playerModal');
+    // Clear blocker interval
     const videoFrame = document.getElementById('videoFrame');
+    if (videoFrame) {
+        if (videoFrame.dataset.blockerInterval) {
+            clearInterval(parseInt(videoFrame.dataset.blockerInterval));
+        }
+        videoFrame.src = 'about:blank';
+    }
+    
+    const modal = document.getElementById('playerModal');
     const sourceSelect = document.getElementById('sourceSelect');
     const failoverBadge = document.getElementById('failoverBadge');
     
@@ -342,7 +442,6 @@ function closePlayer() {
         modal.classList.remove('active');
         document.body.style.overflow = 'auto';
     }
-    if (videoFrame) videoFrame.src = '';
     if (sourceSelect) sourceSelect.value = 'auto';
     if (failoverBadge) failoverBadge.innerHTML = '🔄 SOURCE: AUTO MODE';
     
@@ -366,5 +465,13 @@ function logToTerminal(msg) {
     // Keep only last 20 lines
     while (term.children.length > 20) {
         term.removeChild(term.children[0]);
+    }
+}
+
+// Scroll carousel
+function scrollCarousel(id, dir) {
+    const el = document.getElementById(id);
+    if (el) {
+        el.scrollBy({ left: dir * 280, behavior: 'smooth' });
     }
 }
