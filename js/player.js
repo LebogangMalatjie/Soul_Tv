@@ -1,6 +1,8 @@
 // Video Player & Streaming Logic
 
+// VIDKING first since it's working, others as backup
 const VIDEO_SOURCES = [
+    { name: "VIDKING", url: (id, type, season, episode) => `https://www.vidking.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDSRC.PRO", url: (id, type, season, episode) => `https://vidsrc.pro/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDSRC.ME", url: (id, type, season, episode) => `https://vidsrc.me/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "VIDLINK.PRO", url: (id, type, season, episode) => `https://vidlink.pro/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
@@ -11,8 +13,7 @@ const VIDEO_SOURCES = [
     { name: "VIDEMBED", url: (id, type, season, episode) => `https://vidembed.cc/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "FLIXEMBED", url: (id, type, season, episode) => `https://flixembed.com/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
     { name: "MOVCLOUD", url: (id, type, season, episode) => `https://movcloud.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
-    { name: "VIDSRC.WTF", url: (id, type, season, episode) => `https://vidsrc.wtf/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` },
-    { name: "VIDKING", url: (id, type, season, episode) => `https://www.vidking.net/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` }
+    { name: "VIDSRC.WTF", url: (id, type, season, episode) => `https://vidsrc.wtf/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type !== 'movie' ? `/${season}/${episode}` : ''}` }
 ];
 
 let currentContent = null;
@@ -70,12 +71,16 @@ async function tryLoadVideo(sourceIndex, mediaType, tmdbId, season, episode, tit
         
         if (failoverTimeout) clearTimeout(failoverTimeout);
         
+        // Longer timeout for VIDKING since it redirects but works
+        const timeoutMs = sourceIndex === 0 ? 15000 : 8000;
+        
         failoverTimeout = setTimeout(() => {
             if (!resolved && isAutoMode) {
                 resolved = true;
+                logToTerminal(`⚠️ ${VIDEO_SOURCES[sourceIndex].name} timeout, trying next...`);
                 tryLoadVideo(sourceIndex + 1, mediaType, tmdbId, season, episode, title).then(resolve);
             }
-        }, 12000);
+        }, timeoutMs);
         
         videoFrame.onload = () => {
             if (!resolved && isAutoMode) {
